@@ -660,6 +660,54 @@ export function App() {
     setModal(null);
   }
 
+  function saveThisMonth(goalId, amountPaisa) {
+    const pocket = pockets.find(
+      (item) => item.id === goalId
+    );
+
+    if (
+      !pocket ||
+      !amountPaisa ||
+      amountPaisa <= 0
+    ) {
+      return;
+    }
+
+    setExpenses((current) => [
+      ...current,
+      {
+        id: `S-${Date.now()}`,
+        date: caseData.today,
+        category: "Savings",
+        shop: pocket.name,
+        amountPaisa,
+        amount_bdt: (
+          amountPaisa / 100
+        ).toFixed(2),
+        source: "savings",
+        order: orderRef.current++,
+      },
+    ]);
+
+    setPockets((current) =>
+      current.map((item) =>
+        item.id === goalId
+          ? {
+            ...item,
+            savedPaisa:
+              item.savedPaisa + amountPaisa,
+          }
+          : item
+      )
+    );
+
+    setToast(
+      `Saved ${money(
+        amountPaisa
+      )} to ${pocket.name}.`
+    );
+  }
+
   function openReceipt() {
     setReceiptFile(null);
     setReceiptPreview("");
@@ -1127,6 +1175,9 @@ export function App() {
             setPockets={setPockets}
             onNew={() =>
               setModal("pocket")
+            }
+            onSaveSavings={
+              saveThisMonth
             }
           />
         )}
@@ -1874,7 +1925,48 @@ function GoalsPage({
   pockets,
   setPockets,
   onNew,
+  onSaveSavings,
 }) {
+  const [openId, setOpenId] = useState(null);
+  const [saveGoalId, setSaveGoalId] = useState(
+    pockets[0]?.id || ""
+  );
+  const [saveAmount, setSaveAmount] = useState(
+    pockets[0]
+      ? String(pockets[0].contributionPaisa / 100)
+      : ""
+  );
+  const [savedFlag, setSavedFlag] =
+    useState(false);
+
+  function pickGoal(id) {
+    setSaveGoalId(id);
+    const pocket = pockets.find(
+      (item) => item.id === id
+    );
+    setSaveAmount(
+      pocket
+        ? String(pocket.contributionPaisa / 100)
+        : ""
+    );
+  }
+
+  function submitSave(event) {
+    event.preventDefault();
+
+    const paisa = toPaisa(saveAmount);
+
+    if (!saveGoalId || paisa <= 0) return;
+
+    onSaveSavings(saveGoalId, paisa);
+    setSavedFlag(true);
+
+    window.setTimeout(
+      () => setSavedFlag(false),
+      2000
+    );
+  }
+
   return (
     <div className="page">
       <div className="page-heading">
@@ -1902,79 +1994,158 @@ function GoalsPage({
             100
           );
 
+          const open = openId === pocket.id;
+
           return (
-            <details className="goal-note" key={pocket.id}>
-              <summary>{pocket.name}</summary>
+            <div
+              className={`goal-note${open ? " open" : ""}`}
+              key={pocket.id}
+            >
+              <button
+                type="button"
+                className="goal-note-head"
+                onClick={() =>
+                  setOpenId(
+                    open ? null : pocket.id
+                  )
+                }
+                aria-expanded={open}
+              >
+                {pocket.name}
+              </button>
 
-              <div className="goal-details">
-                <div className="goal-main">
-                  <span className="goal-item">{pocket.item}</span>
+              {open && (
+                <div className="goal-details">
+                  <div className="goal-main">
+                    <span className="goal-item">{pocket.item}</span>
 
-                  <div className="goal-date">
-                    <span>Forecast</span>
-                    <strong>{pocket.completion}</strong>
+                    <div className="goal-date">
+                      <span>Forecast</span>
+                      <strong>{pocket.completion}</strong>
+                    </div>
                   </div>
-                </div>
 
-                <div className="progress-track">
-                  <span style={{ width: `${progress}%` }} />
-                </div>
-
-                <div className="goal-numbers">
-                  <div>
-                    <span>Saved</span>
-                    <strong>{money(pocket.savedPaisa)}</strong>
+                  <div className="progress-track">
+                    <span style={{ width: `${progress}%` }} />
                   </div>
 
-                  <div>
-                    <span>Target</span>
-                    <strong>{money(pocket.targetPaisa)}</strong>
-                  </div>
+                  <div className="goal-numbers">
+                    <div>
+                      <span>Saved</span>
+                      <strong>{money(pocket.savedPaisa)}</strong>
+                    </div>
 
-                  <label>
-                    Monthly plan
-                    <input
-                      type="number"
-                      min="1"
-                      value={pocket.contributionPaisa / 100}
-                      onChange={(event) =>
-                        setPockets((current) =>
-                          current.map((item) =>
-                            item.id === pocket.id
-                              ? {
-                                ...item,
-                                contributionPaisa: toPaisa(event.target.value),
-                              }
-                              : item
+                    <div>
+                      <span>Target</span>
+                      <strong>{money(pocket.targetPaisa)}</strong>
+                    </div>
+
+                    <label>
+                      Monthly plan
+                      <input
+                        type="number"
+                        min="1"
+                        value={pocket.contributionPaisa / 100}
+                        onChange={(event) =>
+                          setPockets((current) =>
+                            current.map((item) =>
+                              item.id === pocket.id
+                                ? {
+                                  ...item,
+                                  contributionPaisa: toPaisa(event.target.value),
+                                }
+                                : item
+                            )
                           )
-                        )
-                      }
-                    />
-                  </label>
+                        }
+                      />
+                    </label>
 
-                  <div>
-                    <span>Affordable</span>
-                    <strong>{money(pocket.affordablePaisa)}</strong>
+                    <div>
+                      <span>Affordable</span>
+                      <strong>{money(pocket.affordablePaisa)}</strong>
+                    </div>
                   </div>
+
+                  <details className="dps">
+                    <summary>
+                      DPS projection at {caseData.dps_annual_rate_percent}% p.a.
+                    </summary>
+
+                    <div>
+                      <span>Deposits <strong>{money(pocket.dps.depositsPaisa)}</strong></span>
+                      <span>Interest <strong>{money(pocket.dps.interestPaisa, true)}</strong></span>
+                      <span>Projected value <strong>{money(pocket.dps.balancePaisa, true)}</strong></span>
+                    </div>
+
+                    <p>Monthly contribution is deposited first, then monthly interest is applied.</p>
+                  </details>
                 </div>
-
-                <details className="dps">
-                  <summary>
-                    DPS projection at {caseData.dps_annual_rate_percent}% p.a.
-                  </summary>
-
-                  <div>
-                    <span>Deposits <strong>{money(pocket.dps.depositsPaisa)}</strong></span>
-                    <span>Interest <strong>{money(pocket.dps.interestPaisa, true)}</strong></span>
-                    <span>Projected value <strong>{money(pocket.dps.balancePaisa, true)}</strong></span>
-                  </div>
-
-                  <p>Monthly contribution is deposited first, then monthly interest is applied.</p>
-                </details>
-              </div>
-            </details>
+              )}
+            </div>
           );
         })}
+      </section>
+
+      <section className="goal-save">
+        <div className="goal-save-head">
+          <h2>Save this month</h2>
+          <span>Move money from this month into a goal.</span>
+        </div>
+
+        <form
+          className="goal-save-form"
+          onSubmit={submitSave}
+        >
+          <label>
+            Name of goal
+            <select
+              value={saveGoalId}
+              onChange={(event) =>
+                pickGoal(event.target.value)
+              }
+            >
+              {pockets.map((pocket) => (
+                <option
+                  key={pocket.id}
+                  value={pocket.id}
+                >
+                  {pocket.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Allocated savings
+            <input
+              type="number"
+              min="1"
+              step="0.01"
+              value={saveAmount}
+              onChange={(event) =>
+                setSaveAmount(
+                  event.target.value
+                )
+              }
+              placeholder="500"
+            />
+          </label>
+
+          <button
+            type="submit"
+            className="button primary"
+          >
+            Save
+          </button>
+        </form>
+
+        {savedFlag && (
+          <p className="goal-save-saved">
+            <Check size={15} />
+            Saved
+          </p>
+        )}
       </section>
     </div>
   );
