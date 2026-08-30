@@ -1,77 +1,41 @@
 {
-  "name": "takaflow-sample",
-  "version": "0.0.0",
-  "app_name": "TakaFlow",
-  "description": "Personal expense and savings dashboard prototype built on the P12 public personal ledger case data.",
-  "category": "finance",
-  "stack": {
-    "language": "JavaScript (JSX)",
-    "framework": "React 19",
-    "build": "Vite 6",
-    "charts": "recharts",
-    "icons": ["lucide-react", "@phosphor-icons/react"],
-    "fonts": ["Nunito Sans", "Caveat"],
-    "hosting": "static client + SPA-fallback worker (Sites-ready)"
-  },
-  "entry": {
-    "html": "index.html",
-    "client": "src/main.jsx",
-    "app": "src/App.jsx",
-    "styles": "src/styles.css"
-  },
-  "scripts": {
-    "dev": "npm run dev",
-    "build": "npm run build",
-    "preview": "npm run preview",
-    "test:sites": "npm run test:sites"
-  },
-  "build_contract": {
-    "command": "npm run build",
-    "required_outputs": [
-      "dist/client/index.html",
-      "dist/server/index.js",
-      "dist/.openai/hosting.json"
-    ],
-    "test": "npm run test:sites (expect 4 passed)"
-  },
-  "data": {
-    "source": "P12_personal_ledger_public.json",
-    "case": "PUB-01",
-    "today": "2026-04-17",
-    "schema_version": "2.1"
-  },
-  "features": [
-    "first-run onboarding (name + monthly income)",
-    "salary-first home dashboard with Spent / Remaining",
-    "natural-language expense entry with review step",
-    "receipt / screenshot image upload with review step",
-    "folder-style savings goals with DPS projection",
-    "save-this-month allocation that updates the ledger immediately",
-    "Your Month summary and calendar view",
-    "search and sorting on the spending list",
-    "editable salary (modal and inline on home)",
-    "localStorage persistence of profile, salary, expenses, and goals",
-    "logout returning to the onboarding/login screen"
-  ],
-  "design": {
-    "palette": {
-      "background": "#c9d4bb (sage)",
-      "accent": "#3f5f2a (deep forest green)",
-      "goals": "#f4d99a (butter yellow)",
-      "tertiary": "#8b3fd1 (lavender)"
-    },
-    "principles": [
-      "no red for negative states; use the dark-green accent",
-      "dark green surfaces use off-white type",
-      "paper noise + grain overlay on the full page background",
-      "goal notepads tilt and lift for a playful feel",
-      "spent figures capped at monthly income"
-    ],
-    "qa_log": "design-qa.md"
-  },
-  "known_limits": [
-    "receipt and natural-language understanding are mock rules, not AI OCR",
-    "ledger persists per-browser via localStorage, not synced",
-    "spending beyond income is clamped for display; the raw totals remain in the list"
+  "release_version": "2.1",
+  "team_id": "LSH26-T048",
+  "form_receipt_time": "set by the organizer from the Google Form",
+  "problems": [
+    {
+      "problem_id": "P12",
+      "repository_url": "https://github.com/Anha-Khan/lsh26-t048-p12",
+      "live_url": "https://lsh26-t048-p12.vercel.app/",
+      "commit_sha": "760b10b",
+      "loads_sample_data": "yes, seeded on start via fetch('/data/P12_personal_ledger_public.json') and case PUB-01",
+      "requirements": {
+        "R1": {
+          "status": "complete",
+          "evidence": "First-run salary, inline salary editing, quick text entry, editable review, expense edit/delete, and salary-bound validation are implemented in src/App.jsx."
+        },
+        "R2": {
+          "status": "partial",
+          "evidence": "Image upload, preview, editable shop/date/category/amount, and an explicitly blank uncertain amount work. The extraction is a deterministic mock (selectReceipt in src/App.jsx returns a fixed result); real OCR/vision is not implemented."
+        },
+        "R3": {
+          "status": "complete",
+          "evidence": "Salary, spent, remaining, category chart, largest transactions, sortable/searchable spending, calendar, and same-period month comparison are derived from the ledger."
+        },
+        "R4": {
+          "status": "complete",
+          "evidence": "Historical-remainder or daily-rate fallback forecasts expected remaining spend and signed month-end balance. Three category-and-amount observations are generated whenever spending exists."
+        },
+        "R5": {
+          "status": "complete",
+          "evidence": "Goal name, item, target, editable repeated contribution, saved total, forecast-affordable amount, forecast completion, stated annual DPS rate, monthly interest rule, deposits, interest, and projected value are present."
+        }
+      },
+      "known_limitations": [
+        "receipt and natural-language understanding are mock rules, not AI OCR",
+        "ledger persists per-browser via localStorage, not synced",
+        "spending beyond income is clamped for display; the raw totals remain in the list"
+      ]
+    }
   ]
 }

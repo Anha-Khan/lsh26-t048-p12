@@ -83,3 +83,18 @@ and `.openai/hosting.json` intact, then `npm run build`.
 Optional `.env` (git-ignored): `GEMINI_API_KEY` is only used if you wire
 `src/lib/extractExpense.js` to a real backend. The prototype runs fully offline
 with built-in mock understanding of expenses and receipts.
+
+---
+
+## Credits
+
+**Team Reverie** · LofiStack Hackathon 2026
+
+| Member | GitHub |
+|--------|--------|
+| Anha Khan | [Anha-Khan](https://github.com/Anha-Khan) |
+| MD. Sadman Saif Zarif | [HyperZx2O](https://github.com/HyperZx2O) |
+
+Built during the LofiStack Hackathon 2026 as the P12 personal-ledger
+submission for team LSH26-T048. Development of this project was assisted by AI
+tools — Codex and opencode — used for implementation and iteration.
