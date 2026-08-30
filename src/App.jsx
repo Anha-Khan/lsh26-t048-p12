@@ -94,6 +94,24 @@ function sum(items, pick = (item) => item.amountPaisa) {
   );
 }
 
+function capToBudget(items, salaryPaisa) {
+  let left = Math.max(0, salaryPaisa);
+
+  return items.map((item) => {
+    const raw =
+      item.amountPaisa ?? item.value;
+
+    const shown = Math.min(
+      raw,
+      Math.max(0, left)
+    );
+
+    left -= shown;
+
+    return { ...item, displayPaisa: shown };
+  });
+}
+
 function monthName(monthKey) {
   const [year, month] = monthKey
     .split("-")
@@ -665,16 +683,40 @@ export function App() {
     setModal(null);
   }
 
+  function budgetRoom() {
+    if (!caseData) return 0;
+
+    const spent = sum(
+      expenses.filter((expense) =>
+        expense.date.startsWith(
+          caseData.months.this
+        )
+      )
+    );
+
+    return Math.max(0, salaryPaisa - spent);
+  }
+
   function saveThisMonth(goalId, amountPaisa) {
     const pocket = pockets.find(
       (item) => item.id === goalId
     );
 
-    if (
-      !pocket ||
-      !amountPaisa ||
-      amountPaisa <= 0
-    ) {
+    if (!pocket) return;
+
+    const rawPaisa = amountPaisa;
+    const cappedPaisa = Math.min(
+      rawPaisa,
+      budgetRoom()
+    );
+
+    if (!cappedPaisa) {
+      if (rawPaisa > 0) {
+        setToast(
+          "No budget left to save this month."
+        );
+      }
+
       return;
     }
 
@@ -685,9 +727,9 @@ export function App() {
         date: caseData.today,
         category: "Savings",
         shop: pocket.name,
-        amountPaisa,
+        amountPaisa: cappedPaisa,
         amount_bdt: (
-          amountPaisa / 100
+          cappedPaisa / 100
         ).toFixed(2),
         source: "savings",
         order: orderRef.current++,
@@ -700,7 +742,7 @@ export function App() {
           ? {
             ...item,
             savedPaisa:
-              item.savedPaisa + amountPaisa,
+              item.savedPaisa + cappedPaisa,
           }
           : item
       )
@@ -708,7 +750,7 @@ export function App() {
 
     setToast(
       `Saved ${money(
-        amountPaisa
+        cappedPaisa
       )} to ${pocket.name}.`
     );
   }
@@ -760,8 +802,12 @@ export function App() {
   function saveReceipt(event) {
     event.preventDefault();
 
-    const amountPaisa = toPaisa(
+    const rawPaisa = toPaisa(
       receiptDraft.amount
+    );
+    const amountPaisa = Math.min(
+      rawPaisa,
+      budgetRoom()
     );
 
     if (
@@ -769,6 +815,12 @@ export function App() {
       !receiptDraft.shop ||
       !receiptDraft.date
     ) {
+      if (rawPaisa > 0) {
+        setToast(
+          "That's beyond this month's budget."
+        );
+      }
+
       return;
     }
 
@@ -805,11 +857,23 @@ export function App() {
       event.currentTarget
     );
 
-    const amountPaisa = toPaisa(
+    const rawPaisa = toPaisa(
       form.get("amount")
     );
+    const amountPaisa = Math.min(
+      rawPaisa,
+      budgetRoom()
+    );
 
-    if (!amountPaisa) return;
+    if (!amountPaisa) {
+      if (rawPaisa > 0) {
+        setToast(
+          "That's beyond this month's budget."
+        );
+      }
+
+      return;
+    }
 
     setExpenses((current) => [
       ...current,
@@ -967,8 +1031,12 @@ export function App() {
   function saveChatExpense() {
     if (!chatDraft) return;
 
-    const amountPaisa = toPaisa(
+    const rawPaisa = toPaisa(
       chatDraft.amount
+    );
+    const amountPaisa = Math.min(
+      rawPaisa,
+      budgetRoom()
     );
 
     if (
@@ -976,6 +1044,12 @@ export function App() {
       !chatDraft.shop ||
       !chatDraft.date
     ) {
+      if (rawPaisa > 0) {
+        setToast(
+          "That's beyond this month's budget."
+        );
+      }
+
       return;
     }
 
@@ -1165,6 +1239,7 @@ export function App() {
             setSearch={setSearch}
             sort={spendingSort}
             setSort={setSpendingSort}
+            salaryPaisa={salaryPaisa}
             onReceipt={openReceipt}
             chatText={chatText}
             setChatText={setChatText}
@@ -1507,7 +1582,10 @@ function HomePage({
           </div>
 
           <div className="category-list">
-            {chartData.map((item) => (
+            {capToBudget(
+              chartData,
+              salaryPaisa
+            ).map((item) => (
               <div key={item.name}>
                 <span>
                   <i
@@ -1521,7 +1599,7 @@ function HomePage({
                 </span>
 
                 <strong>
-                  {money(item.value)}
+                  {money(item.displayPaisa)}
                 </strong>
               </div>
             ))}
@@ -1532,9 +1610,11 @@ function HomePage({
               Largest expenses
             </p>
 
-            {metrics.largest
-              .slice(0, 4)
-              .map((expense) => (
+            {capToBudget(
+              metrics.largest
+                .slice(0, 4),
+              salaryPaisa
+            ).map((expense) => (
                 <div
                   className="expense-line"
                   key={expense.id}
@@ -1553,7 +1633,7 @@ function HomePage({
 
                   <strong>
                     {money(
-                      expense.amountPaisa
+                      expense.displayPaisa
                     )}
                   </strong>
                 </div>
@@ -1646,6 +1726,7 @@ function SpendingPage({
   setSearch,
   sort,
   setSort,
+  salaryPaisa,
   onReceipt,
   chatText,
   setChatText,
@@ -1886,7 +1967,7 @@ function SpendingPage({
               No transactions found.
             </p>
           ) : (
-            expenses.map((expense) => (
+            capToBudget(expenses, salaryPaisa).map((expense) => (
               <div
                 className="transaction-row"
                 key={expense.id}
@@ -1919,7 +2000,7 @@ function SpendingPage({
 
                 <strong>
                   {money(
-                    expense.amountPaisa
+                    expense.displayPaisa
                   )}
                 </strong>
               </div>
