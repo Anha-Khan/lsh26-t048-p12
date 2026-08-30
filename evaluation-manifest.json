@@ -7,7 +7,7 @@
       "problem_id": "P12",
       "repository_url": "https://github.com/Anha-Khan/lsh26-t048-p12",
       "live_url": "https://lsh26-t048-p12.vercel.app/",
-      "commit_sha": "760b10b",
+      "commit_sha": "d58e59bf10b6ad05d90e0a3d02b8da5f5969dd64",
       "loads_sample_data": "yes, seeded on start via fetch('/data/P12_personal_ledger_public.json') and case PUB-01",
       "requirements": {
         "R1": {
