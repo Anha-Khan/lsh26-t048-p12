@@ -324,33 +324,16 @@ export function App() {
           "takaflow-ledger"
         );
 
-        const minimalExpenses = [
-          ...selected.expenses.filter((expense) =>
-            expense.date.startsWith(selected.months.this)
-          ).slice(0, 3),
-          ...selected.expenses.filter((expense) =>
-            expense.date.startsWith(selected.months.last)
-          ).slice(0, 3),
-        ].map((expense, index) => ({
-          ...expense,
-          amountPaisa: toPaisa(expense.amount_bdt),
-          source: "manual",
-          order: index,
-        }));
-
         setSalaryPaisa(
           savedLedger?.salaryPaisa ||
             profile?.salaryPaisa ||
             toPaisa(selected.salary_bdt)
         );
 
-        setExpenses(
-          savedLedger?.expenses || minimalExpenses
-        );
+        setExpenses(savedLedger?.expenses || []);
 
         orderRef.current =
-          (savedLedger?.expenses || minimalExpenses)
-            .length;
+          savedLedger?.expenses?.length || 0;
 
         setPockets(
           (savedLedger?.pockets || selected.pockets.slice(0, 2))
