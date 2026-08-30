@@ -8,12 +8,12 @@
     sans-serif;
 
   color: #27401c;
-  background: #b7c99a;
+  background: #c9d4bb;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 
-  --background: #b7c99a;
+  --background: #c9d4bb;
   --surface: #cfead0;
   --surface-soft: #bfdfae;
 
@@ -1968,6 +1968,97 @@ textarea {
 @media (max-width: 700px) {
   .goal-save-form {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Fun touches */
+
+.goal-note {
+  transition: transform 240ms
+    cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.goal-note:nth-child(odd) {
+  transform: rotate(-1.3deg);
+}
+
+.goal-note:nth-child(even) {
+  transform: rotate(1.3deg);
+}
+
+.goal-note:hover {
+  transform: rotate(0deg)
+    translateY(-6px);
+  z-index: 1;
+  box-shadow: 0 14px 30px
+    rgba(63, 52, 20, 0.18);
+}
+
+.money-now {
+  animation: hero-glow 4s ease-in-out
+    infinite;
+}
+
+@keyframes hero-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 1px 2px
+        rgba(18, 34, 24, 0.08),
+      0 16px 40px
+        rgba(18, 34, 24, 0.18);
+  }
+
+  50% {
+    box-shadow:
+      0 1px 2px
+        rgba(18, 34, 24, 0.08),
+      0 18px 46px
+        rgba(63, 95, 42, 0.4);
+  }
+}
+
+.goal-save-saved {
+  animation: pop 420ms
+    cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+
+  70% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.button:not(:disabled):hover {
+  transform: translateY(-1px) scale(1.02);
+}
+
+.button.primary:not(:disabled):hover {
+  box-shadow: 0 6px 16px
+    rgba(63, 95, 42, 0.35);
+}
+
+.edit-money-button:hover {
+  animation: wiggle 300ms ease;
+}
+
+@keyframes wiggle {
+  25% {
+    transform: rotate(-3deg);
+  }
+
+  75% {
+    transform: rotate(3deg);
   }
 }
 

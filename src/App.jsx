@@ -414,8 +414,10 @@ export function App() {
     const surplusPaisa =
       salaryPaisa - projectedPaisa;
 
-    const remainingPaisa =
-      salaryPaisa - spentPaisa;
+    const remainingPaisa = Math.max(
+      0,
+      salaryPaisa - spentPaisa
+    );
 
     const changePercent = previousToDatePaisa
       ? ((spentPaisa - previousToDatePaisa) /
@@ -525,6 +527,10 @@ export function App() {
     return {
       current,
       spentPaisa,
+      spentCapPaisa: Math.min(
+        spentPaisa,
+        salaryPaisa
+      ),
       remainingPaisa,
       previousToDatePaisa,
       forecastRemainingPaisa,
@@ -1360,7 +1366,7 @@ function HomePage({
     <div className="home">
       <section className="money-now">
         <div className="salary-hero editable-money">
-          <span>Salary</span>
+          <span>Salary 🪙</span>
 
           {salaryDraft === null ? (
             <strong>{money(salaryPaisa)}</strong>
@@ -1413,7 +1419,7 @@ function HomePage({
 
             <strong>
               {money(
-                metrics.spentPaisa
+                metrics.spentCapPaisa
               )}
             </strong>
           </div>
@@ -2089,8 +2095,8 @@ function GoalsPage({
 
       <section className="goal-save">
         <div className="goal-save-head">
-          <h2>Save this month</h2>
-          <span>Move money from this month into a goal.</span>
+          <h2>Save this month 🪙</h2>
+          <span>tuck a little away before you spend it.</span>
         </div>
 
         <form
@@ -2143,7 +2149,7 @@ function GoalsPage({
         {savedFlag && (
           <p className="goal-save-saved">
             <Check size={15} />
-            Saved
+            Saved! ✨
           </p>
         )}
       </section>
@@ -2223,7 +2229,7 @@ function MonthPage({
 
           <strong>
             {money(
-              metrics.spentPaisa
+              metrics.spentCapPaisa
             )}
           </strong>
         </div>
