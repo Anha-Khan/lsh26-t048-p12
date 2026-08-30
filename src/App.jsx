@@ -251,6 +251,29 @@ function WelcomeScreen({
   );
 }
 
+function normalizePocket(pocket, index = 0) {
+  return {
+    ...pocket,
+    name:
+      pocket.name ||
+      pocket.goal ||
+      `Goal ${index + 1}`,
+    item: pocket.item || pocket.name || "",
+    targetPaisa: toPaisa(
+      pocket.targetPaisa ??
+        pocket.target_bdt
+    ),
+    contributionPaisa: toPaisa(
+      pocket.contributionPaisa ??
+        pocket.monthly_contribution_bdt
+    ),
+    savedPaisa:
+      pocket.savedPaisa ||
+      DEMO_SAVED[index] ||
+      0,
+  };
+}
+
 export function App() {
   const [caseData, setCaseData] = useState(null);
   const [expenses, setExpenses] = useState([]);
@@ -330,20 +353,8 @@ export function App() {
             .length;
 
         setPockets(
-          savedLedger?.pockets || selected.pockets.slice(0, 2).map((pocket, index) => ({
-            ...pocket,
-
-            targetPaisa: toPaisa(
-              pocket.target_bdt
-            ),
-
-            contributionPaisa: toPaisa(
-              pocket.monthly_contribution_bdt
-            ),
-
-            savedPaisa:
-              DEMO_SAVED[index] || 0,
-          }))
+          (savedLedger?.pockets || selected.pockets.slice(0, 2))
+            .map(normalizePocket)
         );
       })
       .catch((error) => {
@@ -1957,6 +1968,21 @@ function GoalsPage({
   const [savedFlag, setSavedFlag] =
     useState(false);
 
+  useEffect(() => {
+    const newest =
+      pockets[pockets.length - 1];
+
+    if (newest) {
+      setSaveGoalId(newest.id);
+      setSaveAmount(
+        String(
+          newest.contributionPaisa / 100
+        )
+      );
+      setSavedFlag(false);
+    }
+  }, [pockets.length]);
+
   function pickGoal(id) {
     setSaveGoalId(id);
     const pocket = pockets.find(
@@ -2005,12 +2031,14 @@ function GoalsPage({
 
       <section className="goal-list">
         {pockets.map((pocket) => {
-          const progress = Math.min(
-            100,
-            (pocket.savedPaisa /
-              pocket.targetPaisa) *
-            100
-          );
+          const progress = pocket.targetPaisa
+            ? Math.min(
+                100,
+                (pocket.savedPaisa /
+                  pocket.targetPaisa) *
+                100
+              )
+            : 0;
 
           const open = openId === pocket.id;
 
