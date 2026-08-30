@@ -4,6 +4,14 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   build: {
     outDir: "dist/client",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          charts: ["recharts"],
+          icons: ["lucide-react"],
+        },
+      },
+    },
   },
   optimizeDeps: {
     include: ["react", "react-dom/client"],
