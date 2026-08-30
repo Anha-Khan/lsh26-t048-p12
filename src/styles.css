@@ -1797,7 +1797,7 @@ textarea {
 
 .transaction-column-head {
   display: grid;
-  grid-template-columns: 108px 1fr auto;
+  grid-template-columns: 108px 1fr auto 68px;
   gap: 20px;
   padding: 12px 0;
   color: var(--muted);
@@ -1808,7 +1808,31 @@ textarea {
 }
 
 .transaction-row {
-  grid-template-columns: 108px 1fr auto;
+  grid-template-columns: 108px 1fr auto 68px;
+}
+
+.transaction-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.transaction-actions button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  color: var(--muted);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.transaction-actions button:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .date-cell {
@@ -1819,6 +1843,17 @@ textarea {
   padding: 0 0 22px;
   text-align: center;
   border-top: 0;
+}
+
+.forecast-note {
+  max-width: 760px;
+  margin: 18px 0 34px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.forecast-note strong {
+  color: var(--ink);
 }
 
 .goal-capacity-compact strong {
@@ -1854,16 +1889,81 @@ textarea {
 }
 
 .goal-list {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 22px;
 }
 
 .goal-note {
-  min-height: 176px;
+  min-height: 0;
   padding: 24px;
   border: 1px solid #ded29d;
   border-radius: 5px;
   background: #faf1c9;
+}
+
+.goal-folder-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(190px, 0.7fr) auto auto;
+  align-items: end;
+  gap: 14px;
+}
+
+.goal-folder-row .goal-note-head {
+  align-self: stretch;
+  text-align: left;
+}
+
+.goal-allocation {
+  display: grid;
+  gap: 5px;
+  color: #5e593e;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.goal-allocation input {
+  width: 100%;
+  min-height: 43px;
+  padding: 0 11px;
+  border: 1px solid #d0bd72;
+  border-radius: 8px;
+  background: #fff9dc;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.goal-save-button {
+  min-width: 76px;
+}
+
+.goal-save-stack {
+  display: grid;
+  gap: 5px;
+  align-self: end;
+  text-align: center;
+}
+
+.goal-save-stack small {
+  color: #5e593e;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.goal-delete-button {
+  width: 43px;
+  height: 43px;
+  border: 1px solid #d0bd72;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: #755a3e;
+  cursor: pointer;
+}
+
+.goal-delete-button:hover {
+  background: #f2dda0;
+  color: #8f3329;
 }
 
 .goal-note:nth-child(even) {
@@ -1899,10 +1999,10 @@ textarea {
 }
 
 .goal-note:not(.open) .goal-note-head {
-  position: absolute;
-  inset: 0;
-  padding: 24px;
-  border-radius: inherit;
+  position: static;
+  inset: auto;
+  padding: 0;
+  border-radius: 0;
 }
 
 .goal-save {
@@ -1975,20 +2075,19 @@ textarea {
 
 .goal-note {
   transition: transform 240ms
-    cubic-bezier(0.34, 1.56, 0.64, 1);
+    cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .goal-note:nth-child(odd) {
-  transform: rotate(-1.3deg);
+  transform: none;
 }
 
 .goal-note:nth-child(even) {
-  transform: rotate(1.3deg);
+  transform: none;
 }
 
 .goal-note:hover {
-  transform: rotate(0deg)
-    translateY(-6px);
+  transform: translateY(-2px);
   z-index: 1;
   box-shadow: 0 14px 30px
     rgba(63, 52, 20, 0.18);
@@ -2020,7 +2119,7 @@ textarea {
 
 .goal-save-saved {
   animation: pop 420ms
-    cubic-bezier(0.34, 1.56, 0.64, 1);
+    cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes pop {
@@ -2109,10 +2208,20 @@ textarea {
   .transaction-controls { width: 100%; align-items: stretch; flex-direction: column; }
   .search { min-width: 0; }
   .transaction-column-head,
-  .transaction-row { grid-template-columns: 72px 1fr auto; gap: 10px; }
+  .transaction-row { grid-template-columns: 72px 1fr auto 64px; gap: 10px; }
   .transaction-column-head { font-size: 10px; }
   .goal-list { grid-template-columns: 1fr; }
   .goal-note { min-height: 126px; }
+  .goal-folder-row {
+    grid-template-columns: 1fr auto;
+    align-items: end;
+  }
+  .goal-folder-row .goal-note-head,
+  .goal-allocation {
+    grid-column: 1 / -1;
+  }
+  .goal-save-stack,
+  .goal-save-button { width: 100%; }
   .calendar-day { min-height: 60px; padding: 6px; }
   .calendar-day small { margin-top: 4px; font-size: 10px; }
 }

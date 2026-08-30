@@ -12,6 +12,8 @@ import {
   Search,
   Sparkles,
   Target,
+  Trash2,
+  Pencil,
   Upload,
   Wallet,
   X,
@@ -39,6 +41,7 @@ const CATEGORY_COLORS = {
 };
 
 const DEMO_SAVED = [6000000, 2400000, 1800000];
+const STORAGE_VERSION = 2;
 
 const CATEGORIES = [
   "Groceries",
@@ -121,6 +124,18 @@ function monthName(monthKey) {
     month: "long",
     year: "numeric",
   }).format(new Date(year, month - 1, 1));
+}
+
+function localDateKey(date = new Date()) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function previousMonthKey(date = new Date()) {
+  return localDateKey(new Date(date.getFullYear(), date.getMonth() - 1, 1)).slice(0, 7);
 }
 
 function completionLabel(today, months) {
@@ -270,6 +285,41 @@ function WelcomeScreen({
 }
 
 function normalizePocket(pocket, index = 0) {
+  const sourceTarget = pocket.target_bdt
+    ? toPaisa(pocket.target_bdt)
+    : null;
+
+  const storedTarget =
+    typeof pocket.targetPaisa === "number"
+      ? pocket.targetPaisa
+      : sourceTarget || 0;
+
+  const targetPaisa =
+    sourceTarget && storedTarget > sourceTarget * 10
+      ? sourceTarget
+      : storedTarget;
+
+  const sourceContribution =
+    pocket.monthly_contribution_bdt
+      ? toPaisa(pocket.monthly_contribution_bdt)
+      : null;
+
+  const storedContribution =
+    typeof pocket.contributionPaisa === "number"
+      ? pocket.contributionPaisa
+      : sourceContribution || 0;
+
+  const contributionPaisa =
+    sourceContribution &&
+    storedContribution > sourceContribution * 10
+      ? sourceContribution
+      : storedContribution;
+
+  const storedSaved =
+    typeof pocket.savedPaisa === "number"
+      ? pocket.savedPaisa
+      : DEMO_SAVED[index] || 0;
+
   return {
     ...pocket,
     name:
@@ -277,18 +327,10 @@ function normalizePocket(pocket, index = 0) {
       pocket.goal ||
       `Goal ${index + 1}`,
     item: pocket.item || pocket.name || "",
-    targetPaisa: toPaisa(
-      pocket.targetPaisa ??
-        pocket.target_bdt
-    ),
-    contributionPaisa: toPaisa(
-      pocket.contributionPaisa ??
-        pocket.monthly_contribution_bdt
-    ),
-    savedPaisa:
-      pocket.savedPaisa ||
-      DEMO_SAVED[index] ||
-      0,
+    targetPaisa,
+    contributionPaisa,
+    savedPaisa: Math.min(storedSaved, targetPaisa),
+    saveCount: Number.isFinite(pocket.saveCount) ? pocket.saveCount : 0,
   };
 }
 
@@ -304,10 +346,14 @@ export function App() {
     useState("recent");
   const [toast, setToast] = useState("");
   const [profile, setProfile] = useState(() =>
-    typeof window === "undefined"
-      ? null
-      : readLocal("takaflow-profile")
+    typeof window === "undefined" ? null : (() => {
+      const saved = readLocal("takaflow-profile");
+      return saved?.id && saved?.version === STORAGE_VERSION
+        ? saved
+        : null;
+    })()
   );
+  const [editingExpense, setEditingExpense] = useState(null);
 
   const orderRef = useRef(0);
 
@@ -331,10 +377,19 @@ export function App() {
     fetch("/data/P12_personal_ledger_public.json")
       .then((response) => response.json())
       .then((payload) => {
-        const selected =
+        const sample =
           payload.cases.find(
             (item) => item.case_id === "PUB-01"
           ) || payload.cases[0];
+        const now = new Date();
+        const selected = {
+          ...sample,
+          today: localDateKey(now),
+          months: {
+            this: localDateKey(now).slice(0, 7),
+            last: previousMonthKey(now),
+          },
+        };
 
         setCaseData(selected);
 
@@ -342,20 +397,25 @@ export function App() {
           "takaflow-ledger"
         );
 
+        const ownsLedger = Boolean(
+          profile?.id &&
+          savedLedger?.version === STORAGE_VERSION &&
+          savedLedger?.profileId === profile.id
+        );
+
         setSalaryPaisa(
-          savedLedger?.salaryPaisa ||
+          (ownsLedger && savedLedger.salaryPaisa) ||
             profile?.salaryPaisa ||
             toPaisa(selected.salary_bdt)
         );
 
-        setExpenses(savedLedger?.expenses || []);
+        setExpenses(ownsLedger ? savedLedger.expenses || [] : []);
 
         orderRef.current =
-          savedLedger?.expenses?.length || 0;
+          (ownsLedger ? savedLedger?.expenses?.length : 0) || 0;
 
         setPockets(
-          (savedLedger?.pockets || selected.pockets.slice(0, 2))
-            .map(normalizePocket)
+          (ownsLedger ? savedLedger.pockets || [] : []).map(normalizePocket)
         );
       })
       .catch((error) => {
@@ -374,6 +434,8 @@ export function App() {
     window.localStorage.setItem(
       "takaflow-ledger",
       JSON.stringify({
+        version: STORAGE_VERSION,
+        profileId: profile.id,
         salaryPaisa,
         expenses,
         pockets,
@@ -399,8 +461,32 @@ export function App() {
       caseData.today.slice(8, 10)
     );
 
-    const current = expenses.filter((expense) =>
+    const rawCurrent = expenses.filter((expense) =>
       expense.date.startsWith(caseData.months.this)
+    );
+
+    const budgetedCurrent = capToBudget(
+      [...rawCurrent].sort(
+        (a, b) =>
+          a.date.localeCompare(b.date) ||
+          (a.order || 0) - (b.order || 0)
+      ),
+      salaryPaisa
+    )
+      .filter((expense) => expense.displayPaisa > 0)
+      .map((expense) => ({
+        ...expense,
+        amountPaisa: expense.displayPaisa,
+      }));
+
+    const current = budgetedCurrent.filter(
+      (expense) => expense.category !== "Savings"
+    );
+
+    const savedThisMonthPaisa = sum(
+      budgetedCurrent.filter(
+        (expense) => expense.category === "Savings"
+      )
     );
 
     const previous = expenses.filter((expense) =>
@@ -422,18 +508,29 @@ export function App() {
     const previousToDatePaisa =
       sum(previousToDate);
 
+    const monthDate = new Date(`${caseData.today}T12:00:00`);
+    const daysInMonth = new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth() + 1,
+      0
+    ).getDate();
+    const dailyRateForecast = day > 0
+      ? Math.round((spentPaisa / day) * (daysInMonth - day))
+      : 0;
+    const historicalRemainder = sum(previousAfterDate);
     const forecastRemainingPaisa =
-      sum(previousAfterDate);
+      historicalRemainder > 0 ? historicalRemainder : dailyRateForecast;
 
     const projectedPaisa =
       spentPaisa + forecastRemainingPaisa;
 
-    const surplusPaisa =
-      salaryPaisa - projectedPaisa;
+    const monthEndBalancePaisa =
+      salaryPaisa - projectedPaisa - savedThisMonthPaisa;
+    const surplusPaisa = Math.max(0, monthEndBalancePaisa);
 
     const remainingPaisa = Math.max(
       0,
-      salaryPaisa - spentPaisa
+      salaryPaisa - spentPaisa - savedThisMonthPaisa
     );
 
     const changePercent = previousToDatePaisa
@@ -473,89 +570,50 @@ export function App() {
       );
     });
 
-    const movements = [
-      ...new Set([
-        ...categories.keys(),
-        ...previousCategories.keys(),
-      ]),
-    ]
-      .map((name) => ({
-        name,
-
-        delta:
-          (categories.get(name) || 0) -
-          (previousCategories.get(name) || 0),
-      }))
-      .sort(
-        (a, b) =>
-          Math.abs(b.delta) -
-          Math.abs(a.delta)
+    const insights = categoryRows
+      .slice(0, 3)
+      .map(
+        (category, index) =>
+          `${index + 1}. ${category.name}: ${money(
+            category.value
+          )} — ${Math.round(
+            (category.value / Math.max(1, spentPaisa)) * 100
+          )}% of this month's spending.`
       );
 
-    const remainingCategories = new Map();
-
-    previousAfterDate.forEach((expense) => {
-      remainingCategories.set(
-        expense.category,
-        (remainingCategories.get(
-          expense.category
-        ) || 0) + expense.amountPaisa
-      );
-    });
-
-    const topRemaining = [
-      ...remainingCategories.entries(),
-    ].sort((a, b) => b[1] - a[1])[0];
-
-    const topCategory = categoryRows[0];
-    const topMovement = movements[0];
-
-    const insights = [];
-
-    if (topCategory && spentPaisa > 0) {
+    if (categoryRows[0] && insights.length < 3) {
+      const top = categoryRows[0];
+      const previousTop = previousCategories.get(top.name) || 0;
       insights.push(
-        `${topCategory.name} is your largest category at ${money(
-          topCategory.value
-        )}, around ${Math.round(
-          (topCategory.value / spentPaisa) * 100
-        )}% of spending.`
+        `${insights.length + 1}. ${top.name}: ${money(top.value)} this month versus ${money(previousTop)} by this date last month.`
       );
     }
 
-    if (topMovement) {
+    if (categoryRows[0] && insights.length < 3) {
+      const top = categoryRows[0];
+      const projectedTop = spentPaisa
+        ? Math.round(top.value + forecastRemainingPaisa * (top.value / spentPaisa))
+        : top.value;
       insights.push(
-        `${topMovement.name} is ${money(
-          Math.abs(topMovement.delta)
-        )} ${topMovement.delta >= 0
-          ? "higher"
-          : "lower"
-        } than this point last month.`
-      );
-    }
-
-    if (topRemaining) {
-      insights.push(
-        `Based on last month, ${topRemaining[0]} may add another ${money(
-          topRemaining[1]
-        )} before month end.`
+        `${insights.length + 1}. ${top.name}: about ${money(projectedTop)} by month end if its current share continues.`
       );
     }
 
     return {
       current,
       spentPaisa,
-      spentCapPaisa: Math.min(
-        spentPaisa,
-        salaryPaisa
-      ),
+      savedThisMonthPaisa,
+      spentCapPaisa: spentPaisa,
       remainingPaisa,
       previousToDatePaisa,
       forecastRemainingPaisa,
       projectedPaisa,
       surplusPaisa,
+      monthEndBalancePaisa,
       changePercent,
       categoryRows,
       insights,
+      forecastMethod: historicalRemainder > 0 ? "last month" : "daily pace",
 
       largest: [...current]
         .sort(
@@ -628,7 +686,12 @@ export function App() {
           if (!name || !nextSalary) return;
 
           setSalaryPaisa(nextSalary);
+          setExpenses([]);
+          setPockets([]);
+          orderRef.current = 0;
           setProfile({
+            id: window.crypto?.randomUUID?.() || `profile-${Date.now()}`,
+            version: STORAGE_VERSION,
             name,
             salaryPaisa: nextSalary,
           });
@@ -697,28 +760,29 @@ export function App() {
     return Math.max(0, salaryPaisa - spent);
   }
 
+  function amountFitsBudget(rawPaisa, room = budgetRoom()) {
+    if (rawPaisa > 0 && rawPaisa <= room) return true;
+
+    setToast(
+      room > 0
+        ? `Only ${money(room)} remains. Enter a smaller amount.`
+        : "No money remains from this month's salary."
+    );
+    return false;
+  }
+
   function saveThisMonth(goalId, amountPaisa) {
     const pocket = pockets.find(
       (item) => item.id === goalId
     );
 
-    if (!pocket) return;
+    if (!pocket) return false;
 
     const rawPaisa = amountPaisa;
-    const cappedPaisa = Math.min(
-      rawPaisa,
-      budgetRoom()
-    );
-
-    if (!cappedPaisa) {
-      if (rawPaisa > 0) {
-        setToast(
-          "No budget left to save this month."
-        );
-      }
-
-      return;
-    }
+    const goalRoom = Math.max(0, pocket.targetPaisa - pocket.savedPaisa);
+    const allowed = Math.min(budgetRoom(), goalRoom);
+    if (!amountFitsBudget(rawPaisa, allowed)) return false;
+    const cappedPaisa = rawPaisa;
 
     setExpenses((current) => [
       ...current,
@@ -732,6 +796,7 @@ export function App() {
           cappedPaisa / 100
         ).toFixed(2),
         source: "savings",
+        goalId,
         order: orderRef.current++,
       },
     ]);
@@ -753,6 +818,8 @@ export function App() {
         cappedPaisa
       )} to ${pocket.name}.`
     );
+
+    return true;
   }
 
   function openReceipt() {
@@ -805,24 +872,17 @@ export function App() {
     const rawPaisa = toPaisa(
       receiptDraft.amount
     );
-    const amountPaisa = Math.min(
-      rawPaisa,
-      budgetRoom()
-    );
+    const amountPaisa = rawPaisa;
 
     if (
       !amountPaisa ||
       !receiptDraft.shop ||
       !receiptDraft.date
     ) {
-      if (rawPaisa > 0) {
-        setToast(
-          "That's beyond this month's budget."
-        );
-      }
-
       return;
     }
+
+    if (!amountFitsBudget(amountPaisa)) return;
 
     setExpenses((current) => [
       ...current,
@@ -860,20 +920,9 @@ export function App() {
     const rawPaisa = toPaisa(
       form.get("amount")
     );
-    const amountPaisa = Math.min(
-      rawPaisa,
-      budgetRoom()
-    );
+    const amountPaisa = rawPaisa;
 
-    if (!amountPaisa) {
-      if (rawPaisa > 0) {
-        setToast(
-          "That's beyond this month's budget."
-        );
-      }
-
-      return;
-    }
+    if (!amountFitsBudget(amountPaisa)) return;
 
     setExpenses((current) => [
       ...current,
@@ -898,6 +947,37 @@ export function App() {
     setToast(
       "Expense added. Forecast updated."
     );
+  }
+
+  function updateExpense(event) {
+    event.preventDefault();
+    if (!editingExpense) return;
+
+    const form = new FormData(event.currentTarget);
+    const amountPaisa = toPaisa(form.get("amount"));
+    const room = budgetRoom() + editingExpense.amountPaisa;
+    if (!amountFitsBudget(amountPaisa, room)) return;
+
+    setExpenses((current) => current.map((expense) =>
+      expense.id === editingExpense.id
+        ? {
+          ...expense,
+          shop: String(form.get("shop")),
+          date: String(form.get("date")),
+          category: String(form.get("category")),
+          amountPaisa,
+          amount_bdt: (amountPaisa / 100).toFixed(2),
+        }
+        : expense
+    ));
+    setEditingExpense(null);
+    setModal(null);
+    setToast("Expense updated. All totals recalculated.");
+  }
+
+  function deleteExpense(id) {
+    setExpenses((current) => current.filter((expense) => expense.id !== id));
+    setToast("Expense deleted. All totals recalculated.");
   }
 
   function understandChatExpense(event) {
@@ -1034,24 +1114,17 @@ export function App() {
     const rawPaisa = toPaisa(
       chatDraft.amount
     );
-    const amountPaisa = Math.min(
-      rawPaisa,
-      budgetRoom()
-    );
+    const amountPaisa = rawPaisa;
 
     if (
       !amountPaisa ||
       !chatDraft.shop ||
       !chatDraft.date
     ) {
-      if (rawPaisa > 0) {
-        setToast(
-          "That's beyond this month's budget."
-        );
-      }
-
       return;
     }
+
+    if (!amountFitsBudget(amountPaisa)) return;
 
     setExpenses((current) => [
       ...current,
@@ -1091,7 +1164,14 @@ export function App() {
       form.get("salary")
     );
 
-    if (!nextSalary) return;
+    const committed = sum(expenses.filter((expense) =>
+      expense.date.startsWith(caseData.months.this)
+    ));
+
+    if (!nextSalary || nextSalary < committed) {
+      setToast(`Salary cannot be below the ${money(committed)} already allocated.`);
+      return;
+    }
 
     setSalaryPaisa(nextSalary);
     setModal(null);
@@ -1102,6 +1182,15 @@ export function App() {
   }
 
   function saveSalaryAmount(paisa) {
+    const committed = sum(expenses.filter((expense) =>
+      expense.date.startsWith(caseData.months.this)
+    ));
+
+    if (paisa < committed) {
+      setToast(`Salary cannot be below the ${money(committed)} already allocated.`);
+      return;
+    }
+
     setSalaryPaisa(paisa);
 
     setToast(
@@ -1132,6 +1221,7 @@ export function App() {
         ),
 
         savedPaisa: 0,
+        saveCount: 0,
       },
     ]);
 
@@ -1250,6 +1340,11 @@ export function App() {
               understandChatExpense
             }
             onChatSave={saveChatExpense}
+            onEdit={(expense) => {
+              setEditingExpense(expense);
+              setModal("edit-expense");
+            }}
+            onDelete={deleteExpense}
           />
         )}
 
@@ -1265,6 +1360,16 @@ export function App() {
             onSaveSavings={
               saveThisMonth
             }
+            onDeleteGoal={(id) => {
+              const goal = pockets.find((item) => item.id === id);
+              setPockets((current) => current.filter((item) => item.id !== id));
+              if (goal) {
+                setExpenses((current) => current.filter((expense) =>
+                  !(expense.source === "savings" && expense.goalId === id)
+                ));
+              }
+              setToast("Goal deleted.");
+            }}
           />
         )}
 
@@ -1307,6 +1412,23 @@ export function App() {
             onSubmit={
               saveManualExpense
             }
+          />
+        </Modal>
+      )}
+
+      {modal === "edit-expense" && editingExpense && (
+        <Modal
+          title="Edit expense"
+          onClose={() => {
+            setEditingExpense(null);
+            setModal(null);
+          }}
+        >
+          <ExpenseForm
+            today={caseData.today}
+            expense={editingExpense}
+            submitLabel="Save changes"
+            onSubmit={updateExpense}
           />
         </Modal>
       )}
@@ -1658,6 +1780,11 @@ function HomePage({
 
         <div className="insight-layout">
           <div className="insight-list">
+            {metrics.insights.length === 0 && (
+              <p className="muted">
+                Add your first expense to generate three number-based insights.
+              </p>
+            )}
             {metrics.insights.map(
               (insight, index) => (
                 <div
@@ -1735,6 +1862,8 @@ function SpendingPage({
   setChatDraft,
   onChatSubmit,
   onChatSave,
+  onEdit,
+  onDelete,
 }) {
   return (
     <div className="page">
@@ -1960,6 +2089,7 @@ function SpendingPage({
             <span>Date</span>
             <span>Spent on</span>
             <span>Amount</span>
+            <span aria-hidden="true" />
           </div>
 
           {expenses.length === 0 ? (
@@ -2003,6 +2133,15 @@ function SpendingPage({
                     expense.displayPaisa
                   )}
                 </strong>
+
+                <span className="transaction-actions">
+                  <button type="button" onClick={() => onEdit(expense)} aria-label={`Edit ${expense.shop}`}>
+                    <Pencil size={15} />
+                  </button>
+                  <button type="button" onClick={() => onDelete(expense.id)} aria-label={`Delete ${expense.shop}`}>
+                    <Trash2 size={15} />
+                  </button>
+                </span>
               </div>
             ))
           )}
@@ -2019,60 +2158,41 @@ function GoalsPage({
   setPockets,
   onNew,
   onSaveSavings,
+  onDeleteGoal,
 }) {
   const [openId, setOpenId] = useState(null);
-  const [saveGoalId, setSaveGoalId] = useState(
-    pockets[0]?.id || ""
-  );
-  const [saveAmount, setSaveAmount] = useState(
-    pockets[0]
-      ? String(pockets[0].contributionPaisa / 100)
-      : ""
-  );
-  const [savedFlag, setSavedFlag] =
-    useState(false);
+  const [allocations, setAllocations] = useState({});
 
-  useEffect(() => {
-    const newest =
-      pockets[pockets.length - 1];
+  function allocationFor(pocket) {
+    return allocations[pocket.id] ??
+      String(pocket.contributionPaisa / 100);
+  }
 
-    if (newest) {
-      setSaveGoalId(newest.id);
-      setSaveAmount(
-        String(
-          newest.contributionPaisa / 100
-        )
-      );
-      setSavedFlag(false);
-    }
-  }, [pockets.length]);
+  function saveAllocation(pocket) {
+    const paisa = toPaisa(allocationFor(pocket));
 
-  function pickGoal(id) {
-    setSaveGoalId(id);
-    const pocket = pockets.find(
-      (item) => item.id === id
-    );
-    setSaveAmount(
-      pocket
-        ? String(pocket.contributionPaisa / 100)
-        : ""
+    if (paisa <= 0) return;
+
+    const saved = onSaveSavings(pocket.id, paisa);
+    if (!saved) return;
+
+    setPockets((current) =>
+      current.map((item) =>
+        item.id === pocket.id
+          ? {
+            ...item,
+            contributionPaisa: paisa,
+            saveCount: (item.saveCount || 0) + 1,
+          }
+          : item
+      )
     );
   }
 
-  function submitSave(event) {
-    event.preventDefault();
+  function deleteGoal(id) {
+    onDeleteGoal(id);
 
-    const paisa = toPaisa(saveAmount);
-
-    if (!saveGoalId || paisa <= 0) return;
-
-    onSaveSavings(saveGoalId, paisa);
-    setSavedFlag(true);
-
-    window.setTimeout(
-      () => setSavedFlag(false),
-      2000
-    );
+    if (openId === id) setOpenId(null);
   }
 
   return (
@@ -2094,6 +2214,12 @@ function GoalsPage({
       </div>
 
       <section className="goal-list">
+        {pockets.length === 0 && (
+          <p className="muted">
+            No goals yet. Add your first goal above.
+          </p>
+        )}
+
         {pockets.map((pocket) => {
           const progress = pocket.targetPaisa
             ? Math.min(
@@ -2111,18 +2237,59 @@ function GoalsPage({
               className={`goal-note${open ? " open" : ""}`}
               key={pocket.id}
             >
-              <button
-                type="button"
-                className="goal-note-head"
-                onClick={() =>
-                  setOpenId(
-                    open ? null : pocket.id
-                  )
-                }
-                aria-expanded={open}
-              >
-                {pocket.name}
-              </button>
+              <div className="goal-folder-row">
+                <button
+                  type="button"
+                  className="goal-note-head"
+                  onClick={() =>
+                    setOpenId(open ? null : pocket.id)
+                  }
+                  aria-expanded={open}
+                >
+                  {pocket.name}
+                </button>
+
+                <label className="goal-allocation">
+                  <span>Allocated amount</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    value={allocationFor(pocket)}
+                    onChange={(event) =>
+                      setAllocations((current) => ({
+                        ...current,
+                        [pocket.id]: event.target.value,
+                      }))
+                    }
+                    aria-label={`Allocated amount for ${pocket.name}`}
+                  />
+                </label>
+
+                <div className="goal-save-stack">
+                  <button
+                    type="button"
+                    className="button primary goal-save-button"
+                    onClick={() => saveAllocation(pocket)}
+                  >
+                    Save
+                  </button>
+
+                  {pocket.saveCount > 0 && (
+                    <small>Saved {pocket.saveCount}</small>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  className="goal-delete-button"
+                  onClick={() => deleteGoal(pocket.id)}
+                  aria-label={`Delete ${pocket.name}`}
+                  title={`Delete ${pocket.name}`}
+                >
+                  <Trash2 size={17} />
+                </button>
+              </div>
 
               {open && (
                 <div className="goal-details">
@@ -2150,26 +2317,10 @@ function GoalsPage({
                       <strong>{money(pocket.targetPaisa)}</strong>
                     </div>
 
-                    <label>
-                      Monthly plan
-                      <input
-                        type="number"
-                        min="1"
-                        value={pocket.contributionPaisa / 100}
-                        onChange={(event) =>
-                          setPockets((current) =>
-                            current.map((item) =>
-                              item.id === pocket.id
-                                ? {
-                                  ...item,
-                                  contributionPaisa: toPaisa(event.target.value),
-                                }
-                                : item
-                            )
-                          )
-                        }
-                      />
-                    </label>
+                    <div>
+                      <span>Monthly plan</span>
+                      <strong>{money(pocket.contributionPaisa)}</strong>
+                    </div>
 
                     <div>
                       <span>Affordable</span>
@@ -2195,67 +2346,6 @@ function GoalsPage({
             </div>
           );
         })}
-      </section>
-
-      <section className="goal-save">
-        <div className="goal-save-head">
-          <h2>Save this month 🪙</h2>
-          <span>tuck a little away before you spend it.</span>
-        </div>
-
-        <form
-          className="goal-save-form"
-          onSubmit={submitSave}
-        >
-          <label>
-            Name of goal
-            <select
-              value={saveGoalId}
-              onChange={(event) =>
-                pickGoal(event.target.value)
-              }
-            >
-              {pockets.map((pocket) => (
-                <option
-                  key={pocket.id}
-                  value={pocket.id}
-                >
-                  {pocket.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Allocated savings
-            <input
-              type="number"
-              min="1"
-              step="0.01"
-              value={saveAmount}
-              onChange={(event) =>
-                setSaveAmount(
-                  event.target.value
-                )
-              }
-              placeholder="500"
-            />
-          </label>
-
-          <button
-            type="submit"
-            className="button primary"
-          >
-            Save
-          </button>
-        </form>
-
-        {savedFlag && (
-          <p className="goal-save-saved">
-            <Check size={15} />
-            Saved! ✨
-          </p>
-        )}
       </section>
     </div>
   );
@@ -2355,18 +2445,22 @@ function MonthPage({
 
           <strong
             className={
-              metrics.surplusPaisa <
+              metrics.monthEndBalancePaisa <
                 0
                 ? "negative"
                 : ""
             }
           >
             {money(
-              metrics.surplusPaisa
+              metrics.monthEndBalancePaisa
             )}
           </strong>
         </div>
       </div>
+
+      <p className="forecast-note">
+        Expected spending for the rest of the month: <strong>{money(metrics.forecastRemainingPaisa)}</strong> using your {metrics.forecastMethod}. {metrics.monthEndBalancePaisa >= 0 ? "Expected money left" : "Expected shortfall"} at month end: <strong>{money(Math.abs(metrics.monthEndBalancePaisa))}</strong>.
+      </p>
 
       {calendarOpen && (
         <section className="calendar-panel">
@@ -2417,12 +2511,13 @@ function MonthPage({
         </p>
 
         <h2>
-          {percent(
-            metrics.changePercent
-          )}{" "}
-          {metrics.changePercent > 0
-            ? "more spending"
-            : "less spending"}
+          {metrics.previousToDatePaisa === 0
+            ? metrics.spentPaisa === 0
+              ? "No spending in either period"
+              : `${money(metrics.spentPaisa)} new spending`
+            : `${percent(metrics.changePercent)} ${
+              metrics.changePercent > 0 ? "more spending" : "less spending"
+            }`}
         </h2>
 
         <p>
@@ -2738,6 +2833,8 @@ function Modal({
 function ExpenseForm({
   today,
   onSubmit,
+  expense = null,
+  submitLabel = "Add expense",
 }) {
   return (
     <form
@@ -2751,6 +2848,7 @@ function ExpenseForm({
           name="shop"
           required
           placeholder="Meena Bazar"
+          defaultValue={expense?.shop || ""}
         />
       </label>
 
@@ -2761,14 +2859,14 @@ function ExpenseForm({
           name="date"
           type="date"
           required
-          defaultValue={today}
+          defaultValue={expense?.date || today}
         />
       </label>
 
       <label>
         Category
 
-        <select name="category">
+        <select name="category" defaultValue={expense?.category || "Groceries"}>
           {CATEGORIES.map(
             (category) => (
               <option
@@ -2791,11 +2889,12 @@ function ExpenseForm({
           min="0.01"
           step="0.01"
           required
+          defaultValue={expense ? expense.amountPaisa / 100 : ""}
         />
       </label>
 
       <button className="button primary">
-        Add expense
+        {submitLabel}
       </button>
     </form>
   );
