@@ -7,6 +7,7 @@ import {
   CircleAlert,
   Home,
   List,
+  LogOut,
   Plus,
   Search,
   Sparkles,
@@ -650,6 +651,15 @@ export function App() {
     });
   }
 
+  function logout() {
+    window.localStorage.removeItem(
+      "takaflow-profile"
+    );
+    setProfile(null);
+    setPage("home");
+    setModal(null);
+  }
+
   function openReceipt() {
     setReceiptFile(null);
     setReceiptPreview("");
@@ -1058,6 +1068,17 @@ export function App() {
         <span className="header-date">
           {caseData.today}
         </span>
+
+        <button
+          type="button"
+          className="logout-button"
+          onClick={logout}
+          aria-label="Log out"
+          title="Log out"
+        >
+          <LogOut size={16} />
+          Log out
+        </button>
       </header>
 
       <main className="content">
