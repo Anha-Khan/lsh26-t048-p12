@@ -62,8 +62,13 @@ function readLocal(key) {
 }
 
 function toPaisa(value) {
-  const parsed = Number(
-    String(value ?? "").replace(/[^0-9.-]/g, "")
+  const parsed = Math.abs(
+    Number(
+      String(value ?? "").replace(
+        /[^0-9.-]/g,
+        ""
+      )
+    )
   );
 
   return Number.isFinite(parsed)
@@ -939,9 +944,15 @@ export function App() {
           yesterday.getDate() - 1
         );
 
-        date = yesterday
-          .toISOString()
-          .slice(0, 10);
+        date = [
+          yesterday.getFullYear(),
+          String(
+            yesterday.getMonth() + 1
+          ).padStart(2, "0"),
+          String(
+            yesterday.getDate()
+          ).padStart(2, "0"),
+        ].join("-");
       }
 
       setChatDraft({
@@ -1493,7 +1504,7 @@ function HomePage({
             <div className="chart-center">
               <strong>
                 {money(
-                  metrics.spentPaisa
+                  metrics.spentCapPaisa
                 )}
               </strong>
 
@@ -1738,6 +1749,7 @@ function SpendingPage({
                       chatDraft.amount
                     }
                     type="number"
+                    min="0.01"
                     step="0.01"
                     onChange={(event) =>
                       setChatDraft({
@@ -2516,6 +2528,7 @@ function ReceiptModal({
                         draft.amount
                       }
                       type="number"
+                      min="0.01"
                       step="0.01"
                       placeholder="Confirm amount"
                       onChange={(event) =>

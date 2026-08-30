@@ -470,7 +470,7 @@ p {
 }
 
 .negative {
-  color: #ffb3a6 !important;
+  color: var(--accent) !important;
 }
 
 .home-section {
