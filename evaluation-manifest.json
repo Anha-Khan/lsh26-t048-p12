@@ -1,0 +1,77 @@
+{
+  "name": "takaflow-sample",
+  "version": "0.0.0",
+  "app_name": "TakaFlow",
+  "description": "Personal expense and savings dashboard prototype built on the P12 public personal ledger case data.",
+  "category": "finance",
+  "stack": {
+    "language": "JavaScript (JSX)",
+    "framework": "React 19",
+    "build": "Vite 6",
+    "charts": "recharts",
+    "icons": ["lucide-react", "@phosphor-icons/react"],
+    "fonts": ["Nunito Sans", "Caveat"],
+    "hosting": "static client + SPA-fallback worker (Sites-ready)"
+  },
+  "entry": {
+    "html": "index.html",
+    "client": "src/main.jsx",
+    "app": "src/App.jsx",
+    "styles": "src/styles.css"
+  },
+  "scripts": {
+    "dev": "npm run dev",
+    "build": "npm run build",
+    "preview": "npm run preview",
+    "test:sites": "npm run test:sites"
+  },
+  "build_contract": {
+    "command": "npm run build",
+    "required_outputs": [
+      "dist/client/index.html",
+      "dist/server/index.js",
+      "dist/.openai/hosting.json"
+    ],
+    "test": "npm run test:sites (expect 4 passed)"
+  },
+  "data": {
+    "source": "P12_personal_ledger_public.json",
+    "case": "PUB-01",
+    "today": "2026-04-17",
+    "schema_version": "2.1"
+  },
+  "features": [
+    "first-run onboarding (name + monthly income)",
+    "salary-first home dashboard with Spent / Remaining",
+    "natural-language expense entry with review step",
+    "receipt / screenshot image upload with review step",
+    "folder-style savings goals with DPS projection",
+    "save-this-month allocation that updates the ledger immediately",
+    "Your Month summary and calendar view",
+    "search and sorting on the spending list",
+    "editable salary (modal and inline on home)",
+    "localStorage persistence of profile, salary, expenses, and goals",
+    "logout returning to the onboarding/login screen"
+  ],
+  "design": {
+    "palette": {
+      "background": "#c9d4bb (sage)",
+      "accent": "#3f5f2a (deep forest green)",
+      "goals": "#f4d99a (butter yellow)",
+      "tertiary": "#8b3fd1 (lavender)"
+    },
+    "principles": [
+      "no red for negative states; use the dark-green accent",
+      "dark green surfaces use off-white type",
+      "paper noise + grain overlay on the full page background",
+      "goal notepads tilt and lift for a playful feel",
+      "spent figures capped at monthly income"
+    ],
+    "qa_log": "design-qa.md"
+  },
+  "known_limits": [
+    "receipt and natural-language understanding are mock rules, not AI OCR",
+    "ledger persists per-browser via localStorage, not synced",
+    "spending beyond income is clamped for display; the raw totals remain in the list"
+  ]
+}
